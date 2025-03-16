@@ -110,27 +110,23 @@ def detect(save_img=False):
             if len(det):
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
-                label_mapping = {0: 1, 1: 0}
 
                 # Print results
                 for c in det[:, -1].unique():
-                    mapped_c = label_mapping.get(int(c), int(c))  # Apply label swap
                     n = (det[:, -1] == c).sum()  # detections per class
-                    s += f"{n} {names[mapped_c]}{'s' * (n > 1)}, "  # add to string
+                    s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
 
                 # Write results
                 for *xyxy, conf, cls in reversed(det):
-                    mapped_cls = label_mapping.get(int(cls), int(cls))  # Apply label swap
-
                     if save_txt:  # Write to file
                         xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
-                        line = (mapped_cls, *xywh, conf) if opt.save_conf else (mapped_cls, *xywh)  # label format
+                        line = (int(cls), *xywh, conf) if opt.save_conf else (int(cls), *xywh)  # label format
                         with open(txt_path + '.txt', 'a') as f:
                             f.write(('%g ' * len(line)).rstrip() % line + '\n')
 
                     if save_img or view_img:  # Add bbox to image
-                        label = f'{names[mapped_cls]} {conf:.2f}'
-                        plot_one_box(xyxy, im0, label=label, color=colors[mapped_cls], line_thickness=1)
+                        label = f'{names[int(cls)]} {conf:.2f}'
+                        plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=1)
 
             # Print time (inference + NMS)
             print(f'{s}Done. ({(1E3 * (t2 - t1)):.1f}ms) Inference, ({(1E3 * (t3 - t2)):.1f}ms) NMS')

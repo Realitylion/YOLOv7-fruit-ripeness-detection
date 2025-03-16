@@ -1,12 +1,22 @@
 import os
 
 # Define paths
-labels_path = "./datasets/tomato_dataset_augmented/labels"
+labels_path = "./datasets/new_dataset_2/train/labels"
+print("Checking files in:", os.path.abspath(labels_path))
+
+if not os.path.exists(labels_path):
+    print(f"Error: The directory {labels_path} does not exist.")
+else:
+    print("Existing files:", os.listdir(labels_path))
 
 # Mapping of old labels to new labels
 label_mapping = {
-    "0": "4",  # ripe -> Ripe_Tomato
-    "1": "5",  # unripe -> Raw_Tomato
+    "0": "0",
+    "1": "0",
+    "2": "0",
+    "3": "1",
+    "4": "1",
+    "5": "1",
 }
 
 # Iterate through label files

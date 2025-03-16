@@ -3,7 +3,7 @@ import shutil
 from sklearn.model_selection import train_test_split
 
 # Define dataset paths
-dataset_path = os.path.abspath("datasets/tomato_dataset_augmented")  # Absolute path
+dataset_path = os.path.abspath("datasets/new_dataset_2")  # Absolute path
 images_path = os.path.join(dataset_path, "images")
 labels_path = os.path.join(dataset_path, "labels")
 
