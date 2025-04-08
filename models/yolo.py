@@ -797,6 +797,16 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
             c2 = ch[f] * args[0] ** 2
         elif m is Expand:
             c2 = ch[f] // args[0] ** 2
+        elif m is BiFPN:
+            # Extract input channels from multiple sources
+            c1_list = [ch[x] for x in f]  # List of input channels
+            c2 = args[1]  # Output channels (passed in YAML config)
+            
+            # Ensure arguments match BiFPN's expected format
+            args = [c1_list, c2]
+
+            # Update output channels
+            c2 = make_divisible(c2 * gw, 8)
         else:
             c2 = ch[f]
 

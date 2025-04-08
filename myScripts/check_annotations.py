@@ -1,6 +1,6 @@
 import os
 
-dataset_path = "./datasets/new_dataset/valid/labels"
+dataset_path = "./datasets/dataset/valid/labels"
 for file in os.listdir(dataset_path):
     with open(os.path.join(dataset_path, file), "r") as f:
         for line in f:

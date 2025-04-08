@@ -59,6 +59,10 @@ class Concat(nn.Module):
         self.d = dimension
 
     def forward(self, x):
+        # Resize all feature maps to the size of the first feature map
+        target_size = x[0].shape[-2:]  # Get H, W of first feature map
+        x = [F.interpolate(f, size=target_size, mode="bilinear", align_corners=False) for f in x]
+
         return torch.cat(x, self.d)
 
 
@@ -2020,7 +2024,7 @@ class ST2CSPC(nn.Module):
 
 ##### start of patch merging #####
 
-class PatchMerging(nn.Module):
+class SwinPatchMerging(nn.Module):
     """ Patch Merging Layer (Used in Swin Transformer) """
     def __init__(self, c1, c2):
         super().__init__()
@@ -2046,3 +2050,102 @@ class PatchMerging(nn.Module):
         return x
     
 ##### end of patch merging #####
+
+##### patch embedding #####
+
+class SwinPatchEmbedding(nn.Module):
+    """ Patch Partition + Linear Embedding Layer (Used in Swin Transformer) """
+    def __init__(self, patch_size=4, in_channels=3, embed_dim=96):
+        super().__init__()
+        self.patch_size = patch_size
+        self.in_channels = in_channels
+        self.embed_dim = embed_dim
+
+        # Ensure input dimensions are multiples of patch_size
+        self.proj = nn.Conv2d(in_channels, embed_dim, kernel_size=patch_size, stride=patch_size)
+        self.norm = nn.LayerNorm(embed_dim)
+
+    def forward(self, x):
+        print(f"SwinPatchEmbedding Input Shape: {x.shape}")  # Debugging
+
+        B, C, H, W = x.shape
+
+
+        # Ensure H and W are multiples of patch_size
+        if H % self.patch_size != 0 or W % self.patch_size != 0:
+            pad_h = (self.patch_size - H % self.patch_size) % self.patch_size
+            pad_w = (self.patch_size - W % self.patch_size) % self.patch_size
+            x = nn.functional.pad(x, (0, pad_w, 0, pad_h))
+
+        # Patch partition + embedding
+        x = self.proj(x)  # (B, embed_dim, H/P, W/P)
+        x = x.flatten(2).transpose(1, 2)  # (B, num_patches, embed_dim)
+        x = self.norm(x)  # Normalize embedded patches
+
+        return x
+    
+##### end of patch embedding #####
+
+##### BiFPN #####
+
+class ConvBNReLU(nn.Module):
+    """Standard convolution with BatchNorm and ReLU."""
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
+        super().__init__()
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, bias=False)
+        self.bn = nn.BatchNorm2d(out_channels)
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        return self.relu(self.bn(self.conv(x)))
+
+class BiFPN(nn.Module):
+    """Bidirectional Feature Pyramid Network."""
+    def __init__(self, in_channels_list, out_channels=512):
+        super().__init__()
+        self.convs = nn.ModuleList([
+            ConvBNReLU(in_c, out_channels, kernel_size=1) for in_c in in_channels_list
+        ])
+        self.w1 = nn.Parameter(torch.ones(len(in_channels_list), dtype=torch.float32), requires_grad=True)
+        self.w2 = nn.Parameter(torch.ones(len(in_channels_list), dtype=torch.float32), requires_grad=True)
+
+    def forward(self, inputs):
+        assert len(inputs) == len(self.convs), "Input feature maps do not match expected size"
+
+        # Process feature maps
+        features = [conv(inp) for conv, inp in zip(self.convs, inputs)]
+
+        # Resize all feature maps to the size of the largest one
+        target_size = features[0].shape[-2:]  # Get H, W of the first feature map
+        features = [F.interpolate(f, size=target_size, mode="bilinear", align_corners=False) for f in features]
+
+        # Adaptive weighted sum
+        w1 = F.softmax(self.w1, dim=0)
+        w2 = F.softmax(self.w2, dim=0)
+        fused = sum(w * f for w, f in zip(w1, features)) + sum(w * f for w, f in zip(w2, reversed(features)))
+        
+        return fused
+
+# class BiFPN(nn.Module):
+#     def __init__(self, in_channels, out_channels, num_layers=2):
+#         super(BiFPN, self).__init__()
+#         self.num_layers = num_layers
+#         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=False)
+#         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False)
+#         self.bn = nn.BatchNorm2d(out_channels)
+#         self.swish = nn.SiLU()  # Swish activation function
+
+#     def forward(self, x):
+#         for _ in range(self.num_layers):
+#             x1 = self.conv1(x)
+#             x1 = self.bn(x1)
+#             x1 = self.swish(x1)
+
+#             x2 = self.conv2(x1)
+#             x2 = self.bn(x2)
+#             x2 = self.swish(x2)
+
+#             x = x1 + x2  # Weighted feature fusion
+#         return x
+    
+##### end of BiFPN #####
